@@ -1,0 +1,228 @@
+In this project you will learn
+Start Schme
+Slowly chnageing dimension
+Incremental data
+data logs
+
+End to End Project Notes
+
+Source:
+SQL Source
+
+Name of Project
+RG_Azure_Car_Project
+
+Resource:
+1. Datalake
+  > Bronze
+  > Silver
+  > Gold
+2. ADF
+3. Azure SQL
+ > Use both SQL and Microsoft Entra
+    admingirald05
+    	
+ > Networking Connectivity - Public Endpoint
+ > Create a database
+
+ Syntax:
+CREATE TABLE source_cars_data (
+    Branch_ID VARCHAR(200),
+    Dealer_ID VARCHAR(200),
+    Model_ID VARCHAR(200),
+    Revenue BIGINT,
+    Units_Sold BIGINT,
+    Date_ID VARCHAR(200),
+    Day INT,
+    Month INT,
+    Year INT,
+    BranchName VARCHAR(200),
+    DealerName VARCHAR(200),
+    Product_Name VARCHAR(200)
+);
+
+
+
+ADF
+> create pipeline - "source_prep"
+> Copy data step 
+> Create a link service connected on the github - HTTP
+> create a link service for storing the data from the gitlab - Azure SQL
+    - Select Azure SQL database 
+    - Input User and Password
+
+		IMPORTANT
+		 > Go to Azure SQL 
+		    - N
+		    - Exceptions : Allow Azetworking Setting ure Services and resource to access this Server
+
+    - Create
+> Publish All
+ 
+Dataset: Parameterized Data Set  - ds_git
+ > Add parameter : load_flag  
+ > @{dataset.load_flag()}
+
+Source:
+ > Input SaleData
+
+ Sink
+ > Create a new dataset
+ > Azure SQL DB - ds_sqlDB
+
+ Mapping
+ > Import Schemas
+
+
+Incremental Data have 2 pipeline
+> Intial load pipeline - you need to pull your data from SQL to datalake (Last loaded date)
+
+==============================================================================
+how to perform the incremental loading
+ First we need to have a starting date then we need to max or select the updated transaction date.
+
+ Example:
+ Starting Date = 2024-01-01
+ Max Date  =  2024-12-31
+
+ After loading the data into the direction db / datalake.
+
+ The Starting Date will be replace from the last date of transaction that we ingest
+
+ After:
+ Starting Date = 2024-12-21 >= 
+ MAX Date = 2025-03-31 
+
+ This performaing will be handle by the stored proceedure.
+
+ REFINE:
+ > Initial Load:
+ 	- Pulls full data from SQL to the data lake.
+	- Starts from a defined "starting point" (e.g., earliest or a known cutoff date).
+
+ > Incremental Load:
+ 	- Uses a starting date (e.g., last loaded timestamp) and pulls up to the current max transaction/update date.
+	- Only new or changed data is loaded – this is the essence of incremental loading.
+
+ > Updating the Starting Date:
+ 	- After each successful load, the starting date is updated to the latest transaction date ingested — this ensures only new data is captured next time.
+
+ > Stored Procedure Automation:
+   - Using a stored procedure to handle this logic is a good practice — it ensures consistency and automation.
+
+Implementation:
+Creating a WaterMark Table:
+Syntax will be:
+
+==========================
+CREATE TABLE
+==========================
+CREATE TABLE water_table (
+    last_load VARCHAR(2000)
+);
+
+==========================
+INSERT DATA
+==========================
+INSERT INTO water_table
+VALUES
+(
+	'DT00000'
+)
+
+==========================
+CREATING A STORED PROCEEDURE:
+==========================
+DROP PROCEDURE UpdateWatermarkTable
+
+CREATE PROCEDURE UpdateWatermarkTable
+    @lastload VARCHAR(200)
+AS
+BEGIN
+    BEGIN TRANSACTION;
+
+    UPDATE water_table
+    SET last_load = @lastload;
+
+    COMMIT TRANSACTION;
+END;
+
+==========================
+Azure Data Factory
+==========================
+> Select "lookup" activity 
+> add 2 look up one for "last_load" and "current_load"
+> Add data set and use parameter name "table_name"
+> Query 1 SELECT * FROM water_table;
+> Query 2  SELECT MAX(DATE_ID) as current_load from dbo.source_cars_data
+> connect the 2 look up on copy data activity 
+> Query 3 SELECT * from source_cars_data WHERE DATE_ID > @{activity('last_load').output.value[0].last_load} and <= @{activity('current_load').output.value[0].current_load}
+
+  SELECT * FROM source_cars_data
+	WHERE
+	DATE_ID > '@{activity('last_load').output.value[0].last_load}'
+	AND
+	DATE_ID <= '@{activity('current_load').output.value[0].current_load}'
+
+> SINK create a dataset name "ds_bronze" + and add Link service PATH: bronze/rawdata
+> Add step for storedprocedure name "watermarstoreprocedure" 
+
+=====================================
+
+PHASE 2:
+
+Azure Data Bricks - 
+
+Work flow is a traditional ETL framework schedule.
+Delta Live Tables:
+declaritive ETL framework dont need to mention how to step to do , it mention .
+
+
+Unity Meta Store
+
+
+How to access the admin terminal:
+Select profile:
+ > Mange account
+
+ > Goto Azure Entra ID get the KEY:
+
+
+Link:
+accounts.azuredatabrikcs.net 
+Loging then input the KEY:
+
+Account Console:
+ > User Managgement:
+ > Add User
+ > Add admin account using gmail
+ > Roles ACcount Admin
+
+> Create a metaStore
+> Name carsproject
+> Region: ukSouth
+> ADLS Gen path
+
+
+Resource:
+Access connector for Azure Data Bricks - ADd role storage blob contributor from azure datalake
+
+
+
+Then from azure datalake:
+Create an folder / directory to containers named "unityMetaStore"
+
+
+unityMetaStore@azstrgaccenterprisecars.dfs.core.windows.net (connection only)
+
+copy the resource id from access connector:
+
+To access yung datalake ng azure you need to things: (permission to read and write)
+
+Credentials
+> Create credentials
+> Access connector ID
+
+GX9xBZ~dz%S~Pp5
+
+==========================================================================================
